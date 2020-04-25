@@ -1,4 +1,6 @@
 import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.awt.image.BufferedImage;
@@ -6,6 +8,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Scanner;
@@ -52,6 +55,8 @@ public class TicTacToe implements Runnable {
     private int err = 0;
     private int firstSpot = -1;
     private int secondSpot = -1;
+    private int p1Score = 0;
+    private int p2Score = 0;
 
     private Font font = new Font("Verdana", Font.BOLD, 32);
     private Font smallFont = new Font("Verdana", Font.BOLD, 20);
@@ -77,19 +82,36 @@ public class TicTacToe implements Runnable {
             port = scanner.nextInt();
         }
 
+        if (!connect()) {
+            startServer();
+        }
+
         loadImages();
+        setupGame();
+    }
 
-        painter = new Painter();
-        painter.setPreferredSize(new Dimension(WIDTH, HEIGHT));
+    void startServer() {
+        try {
+            serverSocket = new ServerSocket(port, 8, InetAddress.getByName(ip));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        yourTurn = true;
+        circle = false;
+    }
 
-        frame = new JFrame();
-        frame.setTitle("TicTacToe");
-        frame.setContentPane(painter);
-        frame.setSize(WIDTH, HEIGHT);
-        frame.setLocationRelativeTo(null);
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setResizable(false);
-        frame.setVisible(true);
+    private boolean connect() {
+        try {
+            socket = new Socket(ip, port);
+            outStream = new DataOutputStream(socket.getOutputStream());
+            inStream = new DataInputStream(socket.getInputStream());
+            accepted = true;
+        } catch (IOException e) {
+            System.out.println("Unable to connect to the address: " + ip + ":" + port + " | Starting a server");
+            return false;
+        }
+        System.out.println("Successfully connected to the server. " + accepted);
+        return true;
     }
 
     private void loadImages() throws IOException {
@@ -120,10 +142,22 @@ public class TicTacToe implements Runnable {
         private static final long serialVersionUID = 1L;
 
         public Painter() {
+            JButton restart = new JButton("Play again");
+            restart.setBounds(0,515, 500, 50);
+
             setFocusable(true);
             requestFocus();
             setBackground(Color.white);
             addMouseListener(this);
+
+            this.add(restart);
+            this.setLayout(null);
+
+            restart.addActionListener(new ActionListener() {
+                public void actionPerformed(ActionEvent e) {
+                    setupGame();
+                }
+            });
         }
 
         public void paintComponent(Graphics g) {
@@ -185,7 +219,7 @@ public class TicTacToe implements Runnable {
         }
     }
 
-    public void setupScores(Graphics g, int p1Score, int p2Score) {
+    public void setupScores(Graphics g) {
         String player1String = "Player 1: " + p1Score;
         String player2String = "Player 2: " + p2Score;
 
@@ -204,12 +238,25 @@ public class TicTacToe implements Runnable {
         g.drawString(player2String, 300, 600);
     }
 
+    public void setupGame() {
+        System.out.println("New game setup!");
+        painter = new Painter();
+        painter.setPreferredSize(new Dimension(WIDTH, HEIGHT));
+
+        frame = new JFrame();
+        frame.setTitle(!accepted ? "Player 1 - X" : "Player 2 - O");
+        frame.setContentPane(painter);
+        frame.setSize(WIDTH, HEIGHT);
+        frame.setLocationRelativeTo(null);
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setResizable(false);
+        frame.setVisible(true);
+    }
+
     public void render(Graphics g) {
         g.drawImage(gameBoard, 0, 0, null);
-        int player1Score = 0;
-        int player2Score = 0;
 
-        setupScores(g, player1Score, player2Score);
+        setupScores(g);
 
         if (noCommWithPlayer) {
             System.out.println("No communication with player!");
@@ -251,9 +298,11 @@ public class TicTacToe implements Runnable {
                 if (won) {
                     int stringWidth = g2.getFontMetrics().stringWidth(wonString);
                     g.drawString(wonString, WIDTH / 2 - stringWidth / 2, HEIGHT / 2);
+                    p1Score++;
                 } else if (loser) {
                     int stringWidth = g2.getFontMetrics().stringWidth(loserString);
                     g.drawString(loserString, WIDTH / 2 - stringWidth / 2, HEIGHT / 2);
+                    p2Score++;
                 }
             }
 
